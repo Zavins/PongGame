@@ -41,30 +41,33 @@ function initGame() {
     player1.init();
     //init player2
     player2.init();
-    document.addEventListener('mousemove', (e) => {
-        var mousePos = getMousePos(cv, e);
-        //console.log(e);
-        player2.x = clampNumber(mousePos.x, 20, tWidth - 20);
-        player2.angle = clampNumber(mousePos.y - tHeight / 2, -45, 45);
-        //player1.angle = 0;
-    });
+    //disable mouse
+    // document.addEventListener('mousemove', (e) => {
+    //     var mousePos = getMousePos(cv, e);
+    //     //console.log(e);
+    //     player2.x = clampNumber(mousePos.x, 20, tWidth - 20);
+    //     player2.angle = clampNumber(mousePos.y - tHeight / 2, -45, 45);
+    //     //player1.angle = 0;
+    // });
+}
+
+function makeAction(data){
+    data = JSON.parse(data)
+    player2.action(data["position"], data["angle"]);
 }
 
 function updateGame() {
- //console.log(player1.y,player2.y);
     clearTable();
     drawTable();
+    // checkScore(); Run infinitely (for training)
     ball.update();
     ball.draw();
- //console.log("hey");
     player1.moveAI();
     player1.update();
     player1.draw();
     player2.update();
     player2.draw();
- checkScore();
- //clearTable();
-
+    sendGameData(player1, player2, ball);
 }
 
 function drawTable() {
