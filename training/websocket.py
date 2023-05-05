@@ -17,7 +17,7 @@ async def chat(websocket: WebSocket):
     await websocket.accept()
     while websocket.client_state == WebSocketState.CONNECTED:
         try:
-            data = await websocket.receive()
+            data = await websocket.receive_json()
             response = await receive_state(data)
             #process the data then send the action.
             await websocket.send_json(response)
