@@ -40,8 +40,8 @@ def select_action(state):
     action = np.random.choice(range(9))
 
     # Map the action index to a specific action in the action space
-    # action_space = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 0), (0, 1), (1, -1), (1, 0), (1, 1)]
-    action_space = [(-1, -1), (-1, 1), (-1, 1), (1, -1), (1, 1), (1, 1), (1, -1), (1, 1), (1, 1)]
+    action_space = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 0), (0, 1), (1, -1), (1, 0), (1, 1)]
+    # action_space = [(-1, -1), (-1, 1), (-1, 1), (1, -1), (1, 1), (1, 1), (1, -1), (1, 1), (1, 1)]
     action = action_space[action]
 
     return action
