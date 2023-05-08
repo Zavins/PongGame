@@ -5,7 +5,7 @@ from logging import getLogger
 from fastapi import (APIRouter, Depends, FastAPI, HTTPException, WebSocket,
                      WebSocketDisconnect, status)
 from fastapi.websockets import WebSocketState
-from agent import receive_state
+from agent import DQN
 
 log = getLogger(__name__)
 
@@ -13,12 +13,14 @@ game = APIRouter()
 
 
 @game.websocket("/") # type: ignore
-async def chat(websocket: WebSocket):
+async def socket(websocket: WebSocket):
+    dqn = DQN()
+
     await websocket.accept()
     while websocket.client_state == WebSocketState.CONNECTED:
         try:
-            data = await websocket.receive()
-            response = await receive_state(data)
+            data = await websocket.receive_json()
+            response = dqn.train(data)
             #process the data then send the action.
             await websocket.send_json(response)
         except WebSocketDisconnect as e:

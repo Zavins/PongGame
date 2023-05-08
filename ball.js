@@ -108,13 +108,14 @@ const ball = {
         if (this.serve === 0) {
             this.serve = Math.floor(Math.random() * 2 + 1);
         }
-        if (this.serve === 1) {
-            this.serve = 2;
-            this.velocity.y = -1;
-        } else if (this.serve === 2) {
-            this.serve = 1;
-            this.velocity.y = 1;
-        }
+        // if (this.serve === 1) {
+        //     this.serve = 2;
+        //     this.velocity.y = -1;
+        // } else if (this.serve === 2) {
+        //     this.serve = 1;
+        //     this.velocity.y = 1;
+        // }
+        this.velocity.y = 1;
     },
     
     init: function () {

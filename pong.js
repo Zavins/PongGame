@@ -9,13 +9,14 @@ function main() {
     initGame();
     player2.name = getPlayerName();
     ball.speed = document.getElementById('level').selectedIndex * 0.5 + 2;
-    if (!loop) {
-        loop = function () {
-            updateGame();
-            window.requestAnimationFrame(loop, cv); //continue loop 
-        }
-        window.requestAnimationFrame(loop, cv); // first loop
-    }
+    updateGame();
+    // if (!loop) {
+    //     loop = function () {
+    //         updateGame();
+    //         window.requestAnimationFrame(loop, cv); //continue loop 
+    //     }
+    //     window.requestAnimationFrame(loop, cv); // first loop
+    // }
 }
 
 function disposeGame() {
@@ -54,6 +55,7 @@ function initGame() {
 function makeAction(data){
     data = JSON.parse(data)
     player2.action(data["position"], data["angle"]);
+    updateGame()
 }
 
 function updateGame() {
