@@ -11,18 +11,19 @@ import random
 
 class DQN:
     random.seed(1234)
-    BATCH_SIZE = 5000
+    BATCH_SIZE = 1000
     BINS = 20
     ANGLE_BINS = 2
     GAMMA = 0.99
     EPS_START = 1.0
-    EPS_END = 0.1
-    EPS_DECAY = 100000
+    EPS_END = 0
+    # EPS_DECAY = 0.99995
+    EPS_DECAY = 500000
     TARGET_UPDATE = 200
     MEMORY_CAPACITY = 100000
     N_FEATURES = 8
 
-    ACTIONS = {0: (-1, -1), 1: (-1, 0), 2: (-1, 1), 3: (0, -1), 4: (0, 0), 5: (0, 1), 6: (1, -1), 7: (1, 0), 8: (1, 1)}
+    ACTIONS = {0: (-2, -2), 1: (-2, 0), 2: (-2, 2), 3: (0, -2), 4: (0, 0), 5: (0, 2), 6: (2, -2), 7: (2, 0), 8: (2, 2)}
     N_ACTIONS = len(ACTIONS)
 
     def __init__(self) -> None:
@@ -46,8 +47,8 @@ class DQN:
 
     def build_model(self):
         model = Sequential()
-        model.add(Dense(128, input_shape=(self.N_FEATURES,), activation='relu'))
-        model.add(Dense(128, activation='relu'))
+        model.add(Dense(256, input_shape=(self.N_FEATURES,), activation='relu'))
+        model.add(Dense(256, activation='relu'))
         model.add(Dense(self.N_ACTIONS, activation='linear'))
         return model
 
@@ -58,7 +59,7 @@ class DQN:
             return action
         else:
             q_values = self.policy_net.predict(np.array([state]))
-            print("qvalues", q_values, self.eps, num)
+            # print("qvalues", q_values, self.eps, num)
             action = np.argmax(q_values)
             return action
         
@@ -113,6 +114,27 @@ class DQN:
         if len(self.memory) > self.MEMORY_CAPACITY:
             self.memory.pop(0)
 
+    # def process_data(self, data):
+    #     player1 = data['player1']
+    #     player2 = data['player2']
+    #     ball = data['ball']
+
+    #     player1_X = (player1['x'] // self.BINS)
+    #     player1_angle = int(player1['angle']//self.ANGLE_BINS)
+    #     player2_X = (player2['x'] //  self.BINS)
+    #     player2_angle = int(player2['angle']//self.ANGLE_BINS)
+    #     ball_X = (ball['x'] //  self.BINS)
+    #     ball_Y = (ball['y']// self.BINS)
+    #     ball_velocity_X = int((ball['velocity']['x']*100)//5)
+    #     ball_velocity_Y = int((ball['velocity']['y']*100)//5)
+
+    #     state = np.array([player1_X, player1_angle, player2_X, player2_angle, ball_X, ball_Y, ball_velocity_X, ball_velocity_Y])
+    #     # print(state)
+    #     reward = self.get_reward(player1, player2)
+    #     done = self.check_done(player1, player2)
+    #     self.update_stats(player1, player2)
+    #     return state, reward, done
+
     def process_data(self, data):
         player1 = data['player1']
         player2 = data['player2']
@@ -129,10 +151,11 @@ class DQN:
 
         state = np.array([player1_X, player1_angle, player2_X, player2_angle, ball_X, ball_Y, ball_velocity_X, ball_velocity_Y])
         # print(state)
-        reward = self.get_reward(player1, player2)
+        reward = self.get_reward(player1, player2, data)
         done = self.check_done(player1, player2)
         self.update_stats(player1, player2)
         return state, reward, done
+
     
     def check_done(self, player1, player2):
         if player1["score"] - player2["score"] != self.score_diff:
@@ -140,25 +163,70 @@ class DQN:
             return True
         return False
 
-    def get_reward(self, player1, player2):
-        #AI score
-        if player1["score"] - self.last_player1_score >= 1:
-            #lost ball, -20
-            return -5000
+    # def get_reward(self, player1, player2):
+    #     #AI score
+    #     if player1["score"] - self.last_player1_score >= 1:
+    #         #lost ball, -20
+    #         return -5000
         
-        if player1["hit"] -  self.last_player1_hit >= 1:
-            #oppo_hit, -2
-            return 100
+    #     if player1["hit"] -  self.last_player1_hit >= 1:
+    #         #oppo_hit, -2
+    #         return 100
         
+    #     if player2["score"] - self.last_player2_score >= 1:
+    #         #goal + 50
+    #         return 10000
+        
+    #     if player2["hit"] - self.last_player2_hit >= 1:
+    #         # hit + 1
+    #         return 5000
+        
+    #     return -1
+
+    def get_reward(self, player1, player2, ball):
+        reward = 0
+        
+        # Add a reward for hitting the ball
+        if player1["hit"] - self.last_player1_hit >= 1:
+            reward += 1000
+        
+        # Add a reward for scoring a goal
         if player2["score"] - self.last_player2_score >= 1:
-            #goal + 50
-            return 10000
+            reward += 5000
         
-        if player2["hit"] - self.last_player2_hit >= 1:
-            # hit + 1
-            return 5000
+        # Penalize the agent for losing the ball
+        if player1["score"] - player2["score"] != self.score_diff:
+            if player1["score"] > self.last_player1_score:
+                reward -= 5000
+            else:
+                reward -= 1000
         
-        return -1
+        # Add a reward for moving towards the ball
+        if 'x' in ball and 'x' in player1 and self.prev_state is not None and 0 <= self.prev_state[4] < self.BINS:
+            ball_x = ball['x']
+            player1_x = player1['x']
+            prev_ball_x = self.prev_state[4]
+            prev_player1_x = self.prev_state[0]
+            if ball_x - player1_x > 0 and prev_ball_x - prev_player1_x < ball_x - player1_x:
+                reward += 100
+
+
+        
+        # Adjust the rewards based on the score difference
+        score_diff = player1["score"] - player2["score"]
+        if score_diff > self.score_diff:
+            reward += 100
+        elif score_diff < self.score_diff:
+            reward -= 100
+        
+        # Update the internal state variables
+        self.last_player1_score = player1["score"] 
+        self.last_player1_hit = player1["hit"]
+        self.last_player2_score = player2["score"]
+        self.last_player2_hit = player2["hit"]
+        
+        return reward
+
 
     def update_stats(self, player1, player2):
         self.last_player1_score = player1["score"] 
@@ -183,8 +251,8 @@ class DQN:
             self.eps = self.EPS_END + (self.EPS_START - self.EPS_END) * np.exp(-self.steps / self.EPS_DECAY)
             if self.prev_done:
                 self.reset_stat()
-            if self.steps % 10 == 0:
-                print("Step:", self.steps)
+            if self.steps % 1000 == 0:
+                print("Step:", self.steps, reward)
             
         # next_state, , done, info = 
         action = int(self.select_action(state))
