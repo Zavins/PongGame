@@ -1,16 +1,15 @@
-
 import tensorflow as tf
 from tensorflow import keras
 from keras.layers import Dense
 from keras.models import Sequential, load_model
 import numpy as np
 import random
+from numba import cuda
 
 # Define the agent's deep neural network model
 
 
 class DQN:
-    random.seed(1234)
     BATCH_SIZE = 1000
     BINS = 20
     ANGLE_BINS = 2
@@ -47,23 +46,28 @@ class DQN:
 
     def build_model(self):
         model = Sequential()
-        model.add(Dense(256, input_shape=(self.N_FEATURES,), activation='relu'))
+        model.add(Dense(32, input_shape=(self.N_FEATURES,), activation='relu'))
         model.add(Dense(256, activation='relu'))
+        model.add(Dense(256, activation='relu'))
+        # model.add(Dense(64, activation='relu'))
+        # model.add(Dense(32, activation='relu'))
+        # model.add(Dense(16, activation='relu'))
         model.add(Dense(self.N_ACTIONS, activation='linear'))
         return model
 
     def select_action(self, state):
         num = np.random.uniform()
         if num < self.eps:
+            print("----random action------")
             action = np.random.randint(self.N_ACTIONS)
             return action
         else:
+            print("----AI moving------")
             q_values = self.policy_net.predict(np.array([state]))
             # print("qvalues", q_values, self.eps, num)
             action = np.argmax(q_values)
             return action
         
-
     def optimize_model(self):
         if len(self.memory) < self.BATCH_SIZE:
             return
@@ -163,31 +167,12 @@ class DQN:
             return True
         return False
 
-    # def get_reward(self, player1, player2):
-    #     #AI score
-    #     if player1["score"] - self.last_player1_score >= 1:
-    #         #lost ball, -20
-    #         return -5000
-        
-    #     if player1["hit"] -  self.last_player1_hit >= 1:
-    #         #oppo_hit, -2
-    #         return 100
-        
-    #     if player2["score"] - self.last_player2_score >= 1:
-    #         #goal + 50
-    #         return 10000
-        
-    #     if player2["hit"] - self.last_player2_hit >= 1:
-    #         # hit + 1
-    #         return 5000
-        
-    #     return -1
-
     def get_reward(self, player1, player2, ball):
         reward = 0
         
         # Add a reward for hitting the ball
-        if player1["hit"] - self.last_player1_hit >= 1:
+        if player2["hit"] - self.last_player2_hit >= 1:
+            print("rewarded!!!!")
             reward += 1000
         
         # Add a reward for scoring a goal
@@ -208,16 +193,16 @@ class DQN:
             prev_ball_x = self.prev_state[4]
             prev_player1_x = self.prev_state[0]
             if ball_x - player1_x > 0 and prev_ball_x - prev_player1_x < ball_x - player1_x:
-                reward += 100
+                reward += 1
 
 
         
         # Adjust the rewards based on the score difference
-        score_diff = player1["score"] - player2["score"]
-        if score_diff > self.score_diff:
-            reward += 100
-        elif score_diff < self.score_diff:
-            reward -= 100
+        # score_diff = player1["score"] - player2["score"]
+        # if score_diff > self.score_diff:
+        #     reward += 100
+        # elif score_diff < self.score_diff:
+        #     reward -= 100
         
         # Update the internal state variables
         self.last_player1_score = player1["score"] 
@@ -241,12 +226,33 @@ class DQN:
         self.last_player2_hit = 0
         print(self.total_rewards)
 
+    # def train(self, data):
+    #     state, reward, done = self.process_data(data)
+    #     self.total_rewards += reward
+    #     if (self.steps !=0):
+    #         self.remember(self.prev_state, self.prev_action, self.prev_reward, state, self.prev_done)
+    #         if self.prev_done == True:
+    #             self.optimize_model()
+    #         self.eps = self.EPS_END + (self.EPS_START - self.EPS_END) * np.exp(-self.steps / self.EPS_DECAY)
+    #         if self.prev_done:
+    #             self.reset_stat()
+    #         if self.steps % 1000 == 0:
+    #             print("Step:", self.steps, reward)
+            
+    #     # next_state, , done, info = 
+    #     action = int(self.select_action(state))
+    #     self.prev_action = action
+    #     self.prev_state = state
+    #     self.prev_done = done
+    #     self.prev_reward = reward
+    #     self.steps += 1
+    #     return {"position": self.ACTIONS[action][0], "angle": self.ACTIONS[action][1]}
     def train(self, data):
         state, reward, done = self.process_data(data)
         self.total_rewards += reward
         if (self.steps !=0):
             self.remember(self.prev_state, self.prev_action, self.prev_reward, state, self.prev_done)
-            if self.prev_done == True:
+            if self.steps % 10 == 0:
                 self.optimize_model()
             self.eps = self.EPS_END + (self.EPS_START - self.EPS_END) * np.exp(-self.steps / self.EPS_DECAY)
             if self.prev_done:
