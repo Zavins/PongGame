@@ -4,10 +4,10 @@ var tHeight = 450;
 var loop;
 
 function main() {
-    document.getElementById('button').innerHTML = "Restart Game";
+    // document.getElementById('button').innerHTML = "Restart Game";
     disposeGame();
     initGame();
-    player2.name = getPlayerName();
+    player2.name = "Noob"
     ball.speed = document.getElementById('level').selectedIndex * 0.5 + 2;
     updateGame();
     // if (!loop) {
@@ -39,9 +39,13 @@ function initGame() {
     ball.init();
     ball.reset();
     //init player1
+    player1_score = player1.score
+    player2_score = player2.score
     player1.init();
     //init player2
     player2.init();
+    player1.score = player1_score
+    player2.score = player2_score
     //disable mouse
     // document.addEventListener('mousemove', (e) => {
     //     var mousePos = getMousePos(cv, e);
@@ -54,22 +58,26 @@ function initGame() {
 
 function makeAction(data){
     data = JSON.parse(data)
-    player2.action(data["position"], data["angle"]);
-    updateGame()
+    if(data["game"] && data["game"] === "reset"){
+        main()
+    }else{
+        player2.action(data["position"], data["angle"]);
+        updateGame()
+    }
+    return [player1, player2, ball];
 }
 
 function updateGame() {
-    clearTable();
-    drawTable();
+    // clearTable();
+    // drawTable();
     // checkScore(); Run infinitely (for training)
     ball.update();
-    ball.draw();
+    // ball.draw();
     player1.moveAI();
     player1.update();
-    player1.draw();
+    // player1.draw();
     player2.update();
-    player2.draw();
-    sendGameData(player1, player2, ball);
+    // player2.draw();
 }
 
 function drawTable() {

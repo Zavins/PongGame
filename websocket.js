@@ -34,5 +34,6 @@ socket.addEventListener("open", (event) => {
 
 // Listen for messages
 socket.addEventListener("message", (event) => {
-    makeAction(event.data);
+    gamedata = makeAction(event.data);
+    sendGameData(gamedata[0], gamedata[1], gamedata[2])
 });
