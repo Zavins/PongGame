@@ -81,8 +81,8 @@ class DQN():
         player2_angle = int(player2['angle'] // self.ANGLE_BINS)
         ball_X = (ball['x'] // self.BINS)
         ball_Y = (ball['y'] // self.BINS)
-        ball_velocity_X = int((ball['velocity']['x'] * 100) // 4)
-        ball_velocity_Y = int((ball['velocity']['y'] * 100) // 4)
+        ball_velocity_X = int((ball['velocity']['x'] * 100) // 2)
+        ball_velocity_Y = int((ball['velocity']['y'] * 100) // 2)
         # print(player2_X)
 
         state = np.array([player2_X, player2_angle, ball_X, ball_Y, ball_velocity_X, ball_velocity_Y, player1_X, player1_angle])

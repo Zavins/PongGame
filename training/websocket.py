@@ -5,7 +5,7 @@ from logging import getLogger
 from fastapi import (APIRouter, Depends, FastAPI, HTTPException, WebSocket,
                      WebSocketDisconnect, status)
 from fastapi.websockets import WebSocketState
-from agent1 import DQN
+from agent import DQN
 
 log = getLogger(__name__)
 
