@@ -39,9 +39,13 @@ function initGame() {
     ball.init();
     ball.reset();
     //init player1
+    player1_score = player1.score
+    player2_score = player2.score
     player1.init();
     //init player2
     player2.init();
+    player1.score = player1_score
+    player2.score = player2_score
     //disable mouse
     // document.addEventListener('mousemove', (e) => {
     //     var mousePos = getMousePos(cv, e);
@@ -143,7 +147,7 @@ function getDistance(ball, player) {
 }
 
 function getPlayerName() {
-    var name = prompt("Please enter your name", "Player 2");
+    var name = prompt("Please enter your name", "Bot");
     return name == null ? "player 2" : name;
 }
 

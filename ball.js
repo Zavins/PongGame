@@ -17,11 +17,15 @@ const ball = {
         if (this.y - this.radius <= 0) {
             //player 2 scores
             player2.score++;
+            // player1.reset();
+            // player2.reset();
             this.reset();
             //this.velocity.y *= -1;
         } else if (this.y + this.radius >= tHeight) {
             //player 1 scores
             player1.score++;
+            // player1.reset();
+            // player2.reset();
             this.reset();
         }
 

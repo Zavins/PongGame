@@ -10,15 +10,15 @@ import os
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class DQN:
-    BATCH_SIZE = 1000
+    BATCH_SIZE = 10000
     BINS = 20
     ANGLE_BINS = 2
     GAMMA = 0.99
-    EPS_START = 0.95
+    EPS_START = 1
     EPS_END = 0.003
-    EPS_DECAY = 0.999999
+    EPS_DECAY = 0.99999999
     TARGET_UPDATE = 200
-    MEMORY_CAPACITY = 50000
+    MEMORY_CAPACITY = 1000000
     N_FEATURES = 8
     TOP_MODELS_COUNT = 5
 
@@ -26,6 +26,7 @@ class DQN:
 
     ACTIONS = {0: (-2, -2), 1: (-2, 0), 2: (-2, 2), 3: (0, -2), 4: (0, 0), 5: (0, 2), 6: (2, -2), 7: (2, 0), 8: (2, 2)}
     # ACTIONS = {0: (-1, -1), 1: (-1, 0), 2: (-1, 1), 3: (0, -1), 4: (0, 0), 5: (0, 1), 6: (1, -1), 7: (1, 0), 8: (1, 1)}
+    # ACTIONS = {0: (-3, -3), 1: (-3, 0), 2: (-3, 3), 3: (0, -3), 4: (0, 0), 5: (0, 3), 6: (3, -3), 7: (3, 0), 8: (3, 3)}
     N_ACTIONS = len(ACTIONS)
 
     def __init__(self) -> None:
@@ -53,15 +54,19 @@ class DQN:
 
     def build_model(self):
         model = nn.Sequential(
-            nn.Linear(self.N_FEATURES, 32),
+            nn.Linear(self.N_FEATURES, 256),
             nn.ReLU(),
-            nn.Linear(32, 128),
+            nn.Linear(256, 256),
             nn.ReLU(),
-            nn.Linear(128, 256),
+            nn.Linear(256, 512),
             nn.ReLU(),
-            nn.Linear(256, 128),
+            nn.Linear(512, 512),
             nn.ReLU(),
-            nn.Linear(128, self.N_ACTIONS)
+            nn.Linear(512, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
+            nn.Linear(256, self.N_ACTIONS)
         )
         return model
 
@@ -83,7 +88,9 @@ class DQN:
             return
         samples = random.sample(self.memory, self.BATCH_SIZE)
         states, actions, rewards, next_states, dones = zip(*samples)
+        states = np.array(states)
         states = torch.tensor(states, dtype=torch.float32).to(device)
+
         actions = torch.tensor(actions, dtype=torch.int64).to(device)
         rewards = torch.tensor(rewards, dtype=torch.float32).to(device)
         next_states = torch.tensor(next_states, dtype=torch.float32).to(device)
@@ -95,12 +102,23 @@ class DQN:
 
         loss = nn.MSELoss()(q_values, expected_q_values.detach())
 
+        # Add L1 regularization
+        l1_lambda = 0.001  # Regularization factor
+        l1_reg = torch.tensor(0.).to(device)
+        for param in self.policy_net.parameters():
+            l1_reg += torch.norm(param, p=1)
+        loss += l1_lambda * l1_reg
+
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
 
         if self.steps % self.TARGET_UPDATE == 0:
             self.target_net.load_state_dict(self.policy_net.state_dict())
+
+
+            if self.steps % self.TARGET_UPDATE == 0:
+                self.target_net.load_state_dict(self.policy_net.state_dict())
 
     def remember(self, state, action, reward, next_state, done):
         self.memory.append((state, action, reward, next_state, done))
@@ -139,10 +157,12 @@ class DQN:
         # If game ended (someone scored), give a large negative reward if the AI lost the round.
         if done:
             if player2["score"] > self.last_player2_score:
-                reward += 10000
+                reward += 1000
+            # if player1["score"] > self.last_player1_score:
+            #     reward -= 100
         else: # game hasn't ended, check for beneficial actions
             if player2["hit"] > self.last_player2_hit: # AI hit the ball
-                reward += 1000
+                reward += 100
 
         # Update player statistics
         self.update_stats(player1, player2)
@@ -174,7 +194,7 @@ class DQN:
         self.total_rewards += reward
         if (self.steps !=0):
             self.remember(self.prev_state, self.prev_action, self.prev_reward, state, self.prev_done)
-            if self.steps % 100 == 0:
+            if self.steps % 1000 == 0:
                 self.optimize_model()
             self.eps = self.eps*self.EPS_DECAY if self.eps>self.EPS_END else self.eps
             
@@ -187,12 +207,12 @@ class DQN:
                 self.progress = 0
                 
             if self.steps % 10000 == 0:  # Save model every 10000 steps
-                model_path = f'may6/2_step_{self.steps}.pth'
+                model_path = f'may3_step_{self.steps}.pth'
                 self.save_model(self.total_rewards/10000, model_path)
                 self.total_rewards = 0
 
-            # if self.steps % 300000 == 0:  # Save model every 10000 steps
-                # self.plot_progress()
+            if self.steps % 3000000 == 0:  # Save model every 10000 steps
+                self.plot_progress()
 
             if self.prev_done:
                 self.reset_stat()
@@ -229,9 +249,13 @@ class DQN:
         self.target_net.load_state_dict(torch.load(file_path))
 
     def plot_progress(self):
-        plt.plot(self.progresslist)
-        print(self.progresslist)
-        plt.title('Training progress over time')
-        plt.ylabel('Progress')
-        plt.xlabel('Steps (thousands)')
+        step = int((len(self.progresslist))/10)
+        print(step)
+        avg_rewards = [sum(self.progresslist[i:i+step])/step for i in range(0, len(self.progresslist), step)]
+        
+        plt.plot(avg_rewards)
+        print(avg_rewards)
+        plt.title('Average training reward over time')
+        plt.ylabel('Average Reward')
+        plt.xlabel('Steps (in 10 thousands)')
         plt.show()
