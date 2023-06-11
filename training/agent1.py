@@ -26,7 +26,7 @@ class DQN():
     BATCH_SIZE = 1024
     GAMMA = 0.99
     LR = 0.0001
-    TARGET_UPDATE = 100
+    TARGET_UPDATE = 10
     MEMORY_CAPACITY = 10000
     N_FEATURES = 8
     HIDDEN_SIZE = 128
@@ -46,9 +46,10 @@ class DQN():
         self.target_net = QNetwork(self.N_FEATURES, self.N_ACTIONS, self.HIDDEN_SIZE).to(self.device)
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.target_net.eval()
-        self.optimizer = optim.SGD(self.policy_net.parameters(), lr=self.LR)
+        self.optimizer = optim.Adam(self.policy_net.parameters(), lr=self.LR)
         self.memory = deque(maxlen=self.MEMORY_CAPACITY)
         self.steps_done = 0
+        self.best_score = 0
         
         self.last_player1_score = 0
         self.last_player2_score = 0
@@ -62,9 +63,17 @@ class DQN():
         self.total_rewards = 0
 
     def select_action(self, state, epsilon):
-        sample = random.random()
+        sample = np.random.uniform()
         if sample < epsilon:
-            action = random.choice(range(self.N_ACTIONS))
+            # Explore: select a random action
+                        # Explore: select a random action
+            # action = np.random.randint(0, n_actions)
+            if state[0] > state[2]:
+                action =np.random.randint(0, 3)
+            elif state[0] < state[2]:
+                action = np.random.randint(6, 9)
+            else:
+                action = np.random.randint(0, self.N_ACTIONS)
         else:
             with torch.no_grad():
                 state = torch.tensor(state, dtype=torch.float32).unsqueeze(0).to(self.device)
@@ -86,47 +95,17 @@ class DQN():
         actions = torch.tensor(batch[1], dtype=torch.long).unsqueeze(1).to(self.device)
         rewards = torch.tensor(batch[2], dtype=torch.float32).unsqueeze(1).to(self.device)
         next_states = torch.tensor(np.array(batch[3]), dtype=torch.float32).to(self.device)
+        dones = torch.tensor(batch[4], dtype=torch.uint8).unsqueeze(1).to(self.device)
 
         current_q_values = self.policy_net(states).gather(1, actions)
-        next_q_values = self.target_net(next_states).max(1)[0].unsqueeze(1)
-        target_q_values = rewards + self.GAMMA * next_q_values
+        next_q_values = self.target_net(next_states).gather(1, self.policy_net(next_states).argmax(dim=1, keepdim=True)).detach()
+        target_q_values = rewards + (1 - dones) * self.GAMMA * next_q_values
 
         loss = F.smooth_l1_loss(current_q_values, target_q_values)
-
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
-
-    def update_target_network(self):
-        self.target_net.load_state_dict(self.policy_net.state_dict())
-
-    def check_done(self, player1, player2):
-        if player1["score"] - player2["score"] != self.score_diff:
-            self.score_diff = player1["score"] - player2["score"]
-            return True
-        return False
-
-
-    def get_reward(self, player1, player2, ball_y):
-        if player1["score"] - self.last_player1_score >= 1:
-            return 0
-        if player1["hit"] - self.last_player1_hit >= 1:
-            return 5
-        if player2["score"] - self.last_player2_score >= 1:
-            return -5
-        
-        if player2["hit"] - self.last_player2_hit >= 1:
-            return 0
-        if ball_y > 225:
-            return -0.01
-        return 0
     
-    def update_stats(self, player1, player2):
-        self.last_player1_score = player1["score"]
-        self.last_player1_hit = player1["hit"]
-        self.last_player2_score = player2["score"]
-        self.last_player2_hit = player2["hit"]
-
     def process_data(self, data):
         player1 = data['player1']
         player2 = data['player2']
@@ -148,50 +127,80 @@ class DQN():
         self.update_stats(player1, player2)
         return state, reward, done
 
-    def reset_stat(self):
-        self.last_player1_score = 0
-        self.last_player1_hit = 0
-        self.last_player2_score = 0
-        self.last_player2_hit = 0
-        print(self.total_rewards)
-        self.total_rewards = 0
-
-    async def train(self, n_episodes=10000, epsilon_start=0.8, epsilon_end=0.01, epsilon_decay=0.99):
-        epsilon = epsilon_start
-        for episode in range(n_episodes):
-            self.reset_stat()
-            data = await self.game_step({"game": "reset"})
-            state = self.process_data(data)[0]
-            done = False
-            total_reward = 0
-
-            while not done:
-                action = self.select_action(state, epsilon)
-                data = await self.game_step({"position": self.ACTIONS[action][0], "angle": self.ACTIONS[action][1]})
-                next_state, reward, done = self.process_data(data)
-                self.store_transition(state, action, reward, next_state, done)
-                state = next_state
-                total_reward += reward
-
-                self.optimize_model()
-
-                if self.steps_done % self.TARGET_UPDATE == 0:
-                    self.update_target_network()
-
-                self.steps_done += 1
-
-            if epsilon > epsilon_end:
-                epsilon *= epsilon_decay
-
-            print(f"Episode: {episode + 1}, Total reward: {total_reward}")
-
-            if episode % 100 == 0: #save at every 100 episode
-                self.save_model()
-
-        print("Training complete.")
+    def update_target_network(self):
+        self.target_net.load_state_dict(self.policy_net.state_dict())
 
     def save_model(self):
         torch.save(self.policy_net.state_dict(), self.MODEL_PATH)
 
     def load_model(self):
         self.policy_net.load_state_dict(torch.load(self.MODEL_PATH))
+        self.policy_net.eval()
+
+    async def train(self, n_episodes=10000, epsilon_start=0.1, epsilon_end=0, epsilon_decay=0.998):
+        epsilon = epsilon_start
+        for episode in range(n_episodes):
+            total_rewards = 0
+            self.reset_stat()
+            data = await self.game_step({"game": "reset"})
+            state = self.process_data(data)[0]
+            done = False
+
+            while not done:
+                action = self.select_action(state, epsilon)
+                data = await self.game_step({"position": self.ACTIONS[action][0], "angle": self.ACTIONS[action][1]})
+                next_state, reward, done = self.process_data(data)
+                total_rewards += reward
+                self.store_transition(state, action, reward, next_state, done)
+                state = next_state
+
+                self.optimize_model()
+                if self.steps_done % self.TARGET_UPDATE == 0:
+                    self.update_target_network()
+
+                if done:
+                    if episode % 100 == 0 and episode > 0:
+                        torch.save(self.policy_net.state_dict(), "./training/models/{:.2f}.pth".format(np.mean(total_rewards)))
+                        print(f"Episode {episode}: Total Rewards = {total_rewards}, Epsilon = {epsilon}")
+
+                    if total_rewards > self.best_score:
+                        self.best_score = total_rewards
+                        self.save_model()
+                    break
+
+            if epsilon > epsilon_end:
+                epsilon *= epsilon_decay
+
+    def check_done(self, player1, player2):
+        if player1["score"] - player2["score"] != self.score_diff:
+            self.score_diff = player1["score"] - player2["score"]
+            return True
+        return False
+
+
+    def get_reward(self, player1, player2, ball_y):
+        if player1["score"] - self.last_player1_score >= 1:
+            return -8
+        if player1["hit"] - self.last_player1_hit >= 1:
+            return 8
+        if player2["score"] - self.last_player2_score >= 1:
+            return 18
+        
+        if player2["hit"] - self.last_player2_hit >= 1:
+            return 0
+        if ball_y > 225:
+            return -0.01
+        return 0
+    
+    def update_stats(self, player1, player2):
+        self.last_player1_score = player1["score"]
+        self.last_player1_hit = player1["hit"]
+        self.last_player2_score = player2["score"]
+        self.last_player2_hit = player2["hit"]
+
+    def reset_stat(self):
+        self.last_player1_score = 0
+        self.last_player1_hit = 0
+        self.last_player2_score = 0
+        self.last_player2_hit = 0
+        self.total_rewards = 0
